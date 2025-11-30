@@ -7,21 +7,54 @@ import UpgradeList from './components/UpgradeList';
 import { calculateCost, formatNumber } from './utils/format';
 import { TRANSLATIONS } from './translations';
 
+// Helper to safely parse JSON from localStorage
+const getSavedState = () => {
+  try {
+    const saved = localStorage.getItem(SAVE_KEY);
+    if (saved) return JSON.parse(saved);
+  } catch (e) {
+    console.error("Failed to load save data", e);
+  }
+  return null;
+};
+
 const App: React.FC = () => {
+  // --- Initialization ---
+  const savedData = getSavedState();
+
   // --- State ---
-  const [matter, setMatter] = useState<number>(0);
-  const [generators, setGenerators] = useState<Generator[]>(INITIAL_GENERATORS);
+  const [matter, setMatter] = useState<number>(() => {
+    return (savedData?.matter !== undefined && !isNaN(savedData.matter)) ? savedData.matter : 0;
+  });
+
+  const [generators, setGenerators] = useState<Generator[]>(() => {
+    if (savedData?.generators) {
+      // Merge saved generators with initial to support updates
+      return INITIAL_GENERATORS.map(initGen => {
+        const savedGen = savedData.generators.find((g: any) => g.id === initGen.id);
+        return savedGen ? { ...initGen, count: savedGen.count } : initGen;
+      });
+    }
+    return INITIAL_GENERATORS;
+  });
+
   const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([]);
-  const [language, setLanguage] = useState<Language>('en');
+  
+  const [language, setLanguage] = useState<Language>(() => {
+    return (savedData?.language as Language) || 'en';
+  });
+  
   const [showResetModal, setShowResetModal] = useState<boolean>(false);
   
-  // Refs for loop optimization
+  // Refs for loop optimization and event listeners
   const matterRef = useRef(matter);
   const generatorsRef = useRef(generators);
+  const languageRef = useRef(language);
   
   // Sync refs with state
   useEffect(() => { matterRef.current = matter; }, [matter]);
   useEffect(() => { generatorsRef.current = generators; }, [generators]);
+  useEffect(() => { languageRef.current = language; }, [language]);
 
   // Translation helper
   const t = TRANSLATIONS[language];
@@ -48,57 +81,48 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
-  // --- Save/Load System ---
-  useEffect(() => {
-    // Load on mount
-    const saved = localStorage.getItem(SAVE_KEY);
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed.matter && !isNaN(parsed.matter)) setMatter(parsed.matter);
-        if (parsed.generators) {
-            // Merge saved generators with initial to support game updates adding new generators
-            const mergedGenerators = INITIAL_GENERATORS.map(initGen => {
-                const savedGen = parsed.generators.find((g: Generator) => g.id === initGen.id);
-                return savedGen ? { ...initGen, count: savedGen.count } : initGen;
-            });
-            setGenerators(mergedGenerators);
-        }
-        if (parsed.language) {
-          setLanguage(parsed.language);
-        }
-      } catch (e) {
-        console.error("Failed to load save", e);
-      }
-    }
+  // --- Robust Save System ---
+  const saveGame = useCallback(() => {
+    const state = {
+      matter: matterRef.current,
+      generators: generatorsRef.current.map(g => ({ id: g.id, count: g.count })),
+      language: languageRef.current
+    };
+    localStorage.setItem(SAVE_KEY, JSON.stringify(state));
   }, []);
 
   useEffect(() => {
-    // Auto save
-    const saveInterval = setInterval(() => {
-      const state = {
-        matter: matterRef.current,
-        generators: generatorsRef.current.map(g => ({ id: g.id, count: g.count })),
-        language: language // Save language preference
-      };
-      localStorage.setItem(SAVE_KEY, JSON.stringify(state));
-    }, AUTO_SAVE_INTERVAL);
+    // 1. Auto save interval (Now 1s for near real-time passive save)
+    const saveInterval = setInterval(saveGame, AUTO_SAVE_INTERVAL);
 
-    return () => clearInterval(saveInterval);
-  }, [language]);
+    // 2. Save on page close/refresh/hide
+    const handleUnload = () => saveGame();
+    
+    // 'beforeunload' covers tab close and refresh on desktop
+    window.addEventListener('beforeunload', handleUnload);
+    // 'pagehide' covers mobile browsers switching apps
+    window.addEventListener('pagehide', handleUnload);
+    // 'visibilitychange' covers tab switching better in modern browsers
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') saveGame();
+    });
+    // 'blur' covers window losing focus (alt-tab)
+    window.addEventListener('blur', handleUnload);
 
-  // Save language immediately on change
+    return () => {
+      clearInterval(saveInterval);
+      window.removeEventListener('beforeunload', handleUnload);
+      window.removeEventListener('pagehide', handleUnload);
+      window.removeEventListener('blur', handleUnload);
+      saveGame(); // Final save on unmount
+    };
+  }, [saveGame]);
+
   const handleLanguageChange = (lang: Language) => {
     setLanguage(lang);
-    const saved = localStorage.getItem(SAVE_KEY);
-    let newState: any = {};
-    if (saved) {
-      try {
-        newState = JSON.parse(saved);
-      } catch(e) {}
-    }
-    newState.language = lang;
-    localStorage.setItem(SAVE_KEY, JSON.stringify(newState));
+    // Instant save logic
+    languageRef.current = lang;
+    saveGame();
   };
 
   // --- Interactions ---
@@ -109,7 +133,6 @@ const App: React.FC = () => {
     setMatter(prev => prev + clickPower);
 
     // Add floating text visual
-    // Randomize slight offset
     const offsetX = (Math.random() - 0.5) * 40;
     const offsetY = (Math.random() - 0.5) * 40;
     
@@ -129,18 +152,31 @@ const App: React.FC = () => {
   };
 
   const buyGenerator = (id: string) => {
-    setGenerators(prev => prev.map(gen => {
-      if (gen.id !== id) return gen;
-      
-      const cost = calculateCost(gen.baseCost, gen.count);
-      if (matterRef.current < cost) return gen;
+    // Calculate new state locally first to allow Instant Saving
+    const currentGenerators = generatorsRef.current;
+    const currentMatter = matterRef.current;
+    
+    const targetGen = currentGenerators.find(g => g.id === id);
+    if (!targetGen) return;
 
-      // Deduct cost
-      setMatter(m => m - cost);
-      
-      // Increment count
-      return { ...gen, count: gen.count + 1 };
-    }));
+    const cost = calculateCost(targetGen.baseCost, targetGen.count);
+    if (currentMatter < cost) return;
+
+    const newMatter = currentMatter - cost;
+    const newGenerators = currentGenerators.map(gen => 
+      gen.id === id ? { ...gen, count: gen.count + 1 } : gen
+    );
+
+    // 1. Update React State (UI)
+    setMatter(newMatter);
+    setGenerators(newGenerators);
+
+    // 2. Update Refs Immediately (Data Integrity)
+    matterRef.current = newMatter;
+    generatorsRef.current = newGenerators;
+
+    // 3. Trigger Instant Save
+    saveGame();
   };
 
   const handleResetRequest = () => {
@@ -153,9 +189,12 @@ const App: React.FC = () => {
     
     // Reset state
     setMatter(0);
-    // Deep copy/reset initial generators to ensure counts are 0
     setGenerators(INITIAL_GENERATORS.map(g => ({...g})));
     
+    // Reset refs
+    matterRef.current = 0;
+    generatorsRef.current = INITIAL_GENERATORS.map(g => ({...g}));
+
     // Close modal
     setShowResetModal(false);
   };

@@ -64,4 +64,4 @@ export const INITIAL_GENERATORS: Generator[] = [
 ];
 
 export const SAVE_KEY = 'cosmic_genesis_save_v1';
-export const AUTO_SAVE_INTERVAL = 30000; // 30 seconds
+export const AUTO_SAVE_INTERVAL = 1000; // 1 second for "real-time" saving
