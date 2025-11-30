@@ -8,7 +8,7 @@ interface SingularityProps {
   language: Language;
 }
 
-const Singularity: React.FC<SingularityProps> = ({ onClick, matterPerClick, language }) => {
+const Singularity: React.FC<SingularityProps> = ({ onClick, language }) => {
   const [isClicking, setIsClicking] = useState(false);
   const [ripples, setRipples] = useState<{id: number, x: number, y: number}[]>([]);
   const t = TRANSLATIONS[language];

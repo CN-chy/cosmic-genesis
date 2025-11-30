@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { INITIAL_GENERATORS, AUTO_SAVE_INTERVAL, SAVE_KEY } from './constants';
-import { GameState, Generator, FloatingText, Language } from './types';
+import { Generator, FloatingText, Language } from './types';
 import Singularity from './components/Singularity';
 import StatsPanel from './components/StatsPanel';
 import UpgradeList from './components/UpgradeList';
@@ -109,7 +109,6 @@ const App: React.FC = () => {
     setMatter(prev => prev + clickPower);
 
     // Add floating text visual
-    const rect = e.currentTarget.getBoundingClientRect();
     // Randomize slight offset
     const offsetX = (Math.random() - 0.5) * 40;
     const offsetY = (Math.random() - 0.5) * 40;
