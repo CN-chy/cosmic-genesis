@@ -1,5 +1,12 @@
 export const formatNumber = (num: number): string => {
-  if (num < 1000) return Math.floor(num).toString();
+  // Fix for small numbers (like 0.5 MPS) showing as 0
+  if (num < 1000) {
+    // If number is small and has a decimal part (e.g. 0.5), show 1 decimal place
+    if (num < 10 && num % 1 !== 0) {
+      return num.toFixed(1);
+    }
+    return Math.floor(num).toString();
+  }
   
   const suffixes = ["", "k", "M", "B", "T", "Qa", "Qi", "Sx"];
   const suffixNum = Math.floor(("" + Math.floor(num)).length / 3);

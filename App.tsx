@@ -200,7 +200,8 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-200 overflow-hidden font-sans selection:bg-indigo-500 selection:text-white">
+    // Added overscroll-none to prevent rubber-banding on mobile
+    <div className="h-[100dvh] w-full bg-slate-900 text-slate-200 overflow-hidden font-sans selection:bg-indigo-500 selection:text-white relative overscroll-none touch-none">
       {/* Floating Text Overlay - Global */}
       {floatingTexts.map(ft => (
         <div
@@ -214,8 +215,8 @@ const App: React.FC = () => {
 
       {/* Reset Confirmation Modal */}
       {showResetModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-red-500/50 p-6 rounded-xl max-w-md w-full shadow-[0_0_50px_rgba(239,68,68,0.2)] mx-4 animate-pulse-glow">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+          <div className="bg-slate-900 border border-red-500/50 p-6 rounded-xl max-w-md w-full shadow-[0_0_50px_rgba(239,68,68,0.2)] animate-pulse-glow">
             <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
               ⚠️ {t.big_crunch}
             </h3>
@@ -241,34 +242,36 @@ const App: React.FC = () => {
       )}
 
       {/* Main Layout */}
-      <div className="flex flex-col md:flex-row h-screen">
+      <div className="flex flex-col md:flex-row h-full">
         
-        {/* Left Panel: The Game World */}
-        <div className="flex-1 relative flex flex-col p-6 bg-[url('https://picsum.photos/seed/nebula/1920/1080')] bg-cover bg-center">
+        {/* Left Panel: The Game World 
+            Mobile: Fixed 30% height to ensure Upgrade list (70%) has space.
+        */}
+        <div className="h-[30%] md:h-auto md:flex-1 shrink-0 relative flex flex-col p-2 md:p-6 bg-[url('https://picsum.photos/seed/nebula/1920/1080')] bg-cover bg-center touch-auto">
           {/* Dark overlay for readability */}
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-0"></div>
           
-          <div className="relative z-10 flex flex-col h-full">
+          <div className="relative z-10 flex flex-col h-full overflow-hidden">
             {/* Header */}
-            <div className="flex justify-between items-start mb-8">
+            <div className="flex justify-between items-start mb-1 md:mb-8 shrink-0">
                <div>
-                 <h1 className="text-3xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
+                 <h1 className="text-lg md:text-3xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400 leading-none">
                   {t.app_title}
                  </h1>
-                 <p className="text-slate-400 text-xs mt-1">{t.version}</p>
+                 <p className="text-slate-400 text-[10px] md:text-xs mt-0.5 hidden md:block">{t.version}</p>
                </div>
                
-               <div className="flex flex-col items-end gap-2">
+               <div className="flex flex-col items-end gap-1 md:gap-2">
                  <div className="flex bg-slate-800 rounded-md p-1 border border-slate-700">
                     <button 
                       onClick={() => handleLanguageChange('en')}
-                      className={`px-2 py-1 text-xs rounded transition-colors ${language === 'en' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      className={`px-2 py-0.5 md:py-1 text-[10px] md:text-xs rounded transition-colors ${language === 'en' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
                     >
                       EN
                     </button>
                     <button 
                       onClick={() => handleLanguageChange('zh')}
-                      className={`px-2 py-1 text-xs rounded transition-colors ${language === 'zh' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                      className={`px-2 py-0.5 md:py-1 text-[10px] md:text-xs rounded transition-colors ${language === 'zh' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
                     >
                       中文
                     </button>
@@ -276,15 +279,15 @@ const App: React.FC = () => {
                  
                  <button 
                   onClick={handleResetRequest}
-                  className="text-xs text-red-500 hover:text-red-300 underline opacity-50 hover:opacity-100 transition-opacity"
+                  className="text-[10px] text-red-500 hover:text-red-300 underline opacity-50 hover:opacity-100 transition-opacity"
                  >
                    {t.big_crunch}
                  </button>
                </div>
             </div>
 
-            {/* Visual Center */}
-            <div className="flex-grow flex items-center justify-center">
+            {/* Visual Center - Flexible container */}
+            <div className="flex-grow flex items-center justify-center min-h-0">
               <Singularity 
                 onClick={handleSingularityClick} 
                 matterPerClick={1 + (mps * 0.01)} 
@@ -292,20 +295,22 @@ const App: React.FC = () => {
               />
             </div>
 
-            {/* Footer Message */}
-            <div className="text-center text-slate-500 text-xs mt-auto pt-4">
+            {/* Footer Message (Hidden on mobile) */}
+            <div className="hidden md:block text-center text-slate-500 text-xs mt-auto pt-4 shrink-0">
               {t.footer_quote}
             </div>
           </div>
         </div>
 
-        {/* Right Panel: Controls */}
-        <div className="w-full md:w-[400px] lg:w-[450px] bg-slate-950 border-l border-slate-800 flex flex-col h-1/2 md:h-full z-20 shadow-2xl">
-          <div className="p-6 pb-2">
+        {/* Right Panel: Controls 
+            Mobile: Fixed 70% height
+        */}
+        <div className="h-[70%] md:h-auto md:w-[400px] lg:w-[450px] bg-slate-950 border-t md:border-t-0 md:border-l border-slate-800 flex flex-col z-20 shadow-2xl min-h-0">
+          <div className="p-3 md:p-6 pb-2 shrink-0 bg-slate-950 z-30">
             <StatsPanel matter={matter} mps={mps} language={language} />
           </div>
           
-          <div className="flex-1 overflow-y-auto p-6 scroll-smooth">
+          <div className="flex-1 overflow-y-auto p-3 md:p-6 pt-0 scroll-smooth overscroll-contain touch-pan-y">
              <UpgradeList 
                generators={generators} 
                currentMatter={matter} 
