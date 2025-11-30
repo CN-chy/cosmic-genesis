@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Cosmic Genesis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @keyframes pulse-glow {
+        0%, 100% { box-shadow: 0 0 20px 5px rgba(99, 102, 241, 0.5); }
+        50% { box-shadow: 0 0 40px 20px rgba(168, 85, 247, 0.6); }
+      }
+      @keyframes float-up {
+        0% { transform: translateY(0) scale(1); opacity: 1; }
+        100% { transform: translateY(-50px) scale(1.2); opacity: 0; }
+      }
+      .animate-float {
+        animation: float-up 1s ease-out forwards;
+      }
+      .animate-pulse-glow {
+        animation: pulse-glow 3s infinite;
+      }
+      body {
+        background-color: #0f172a;
+        color: #e2e8f0;
+      }
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #1e293b; 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #475569; 
+        border-radius: 4px;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #64748b; 
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1"
+  }
+}
+</script>
+<link rel="stylesheet" href="/index.css">
+</head>
+  <body>
+    <div id="root"></div>
+    <!-- Point to the entry file for Vite -->
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

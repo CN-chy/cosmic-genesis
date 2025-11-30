@@ -1,0 +1,284 @@
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { INITIAL_GENERATORS, AUTO_SAVE_INTERVAL, SAVE_KEY } from './constants';
+import { GameState, Generator, FloatingText, Language } from './types';
+import Singularity from './components/Singularity';
+import StatsPanel from './components/StatsPanel';
+import UpgradeList from './components/UpgradeList';
+import { calculateCost, formatNumber } from './utils/format';
+import { TRANSLATIONS } from './translations';
+
+const App: React.FC = () => {
+  // --- State ---
+  const [matter, setMatter] = useState<number>(0);
+  const [generators, setGenerators] = useState<Generator[]>(INITIAL_GENERATORS);
+  const [floatingTexts, setFloatingTexts] = useState<FloatingText[]>([]);
+  const [language, setLanguage] = useState<Language>('en');
+  const [showResetModal, setShowResetModal] = useState<boolean>(false);
+  
+  // Refs for loop optimization
+  const matterRef = useRef(matter);
+  const generatorsRef = useRef(generators);
+  
+  // Sync refs with state
+  useEffect(() => { matterRef.current = matter; }, [matter]);
+  useEffect(() => { generatorsRef.current = generators; }, [generators]);
+
+  // Translation helper
+  const t = TRANSLATIONS[language];
+
+  // --- Derived State ---
+  const calculateMPS = useCallback(() => {
+    return generators.reduce((acc, gen) => acc + (gen.baseProduction * gen.count), 0);
+  }, [generators]);
+
+  const mps = calculateMPS();
+
+  // --- Game Loop ---
+  useEffect(() => {
+    const tickRate = 100; // Run 10 times a second
+    const interval = setInterval(() => {
+      const currentMPS = generatorsRef.current.reduce((acc, gen) => acc + (gen.baseProduction * gen.count), 0);
+      const productionPerTick = currentMPS / (1000 / tickRate);
+      
+      if (productionPerTick > 0) {
+        setMatter(prev => prev + productionPerTick);
+      }
+    }, tickRate);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // --- Save/Load System ---
+  useEffect(() => {
+    // Load on mount
+    const saved = localStorage.getItem(SAVE_KEY);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.matter && !isNaN(parsed.matter)) setMatter(parsed.matter);
+        if (parsed.generators) {
+            // Merge saved generators with initial to support game updates adding new generators
+            const mergedGenerators = INITIAL_GENERATORS.map(initGen => {
+                const savedGen = parsed.generators.find((g: Generator) => g.id === initGen.id);
+                return savedGen ? { ...initGen, count: savedGen.count } : initGen;
+            });
+            setGenerators(mergedGenerators);
+        }
+        if (parsed.language) {
+          setLanguage(parsed.language);
+        }
+      } catch (e) {
+        console.error("Failed to load save", e);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    // Auto save
+    const saveInterval = setInterval(() => {
+      const state = {
+        matter: matterRef.current,
+        generators: generatorsRef.current.map(g => ({ id: g.id, count: g.count })),
+        language: language // Save language preference
+      };
+      localStorage.setItem(SAVE_KEY, JSON.stringify(state));
+    }, AUTO_SAVE_INTERVAL);
+
+    return () => clearInterval(saveInterval);
+  }, [language]);
+
+  // Save language immediately on change
+  const handleLanguageChange = (lang: Language) => {
+    setLanguage(lang);
+    const saved = localStorage.getItem(SAVE_KEY);
+    let newState: any = {};
+    if (saved) {
+      try {
+        newState = JSON.parse(saved);
+      } catch(e) {}
+    }
+    newState.language = lang;
+    localStorage.setItem(SAVE_KEY, JSON.stringify(newState));
+  };
+
+  // --- Interactions ---
+  const handleSingularityClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    // Click power calculation (base 1 + 1% of MPS)
+    const clickPower = 1 + (mps * 0.01);
+    
+    setMatter(prev => prev + clickPower);
+
+    // Add floating text visual
+    const rect = e.currentTarget.getBoundingClientRect();
+    // Randomize slight offset
+    const offsetX = (Math.random() - 0.5) * 40;
+    const offsetY = (Math.random() - 0.5) * 40;
+    
+    const newText: FloatingText = {
+      id: Date.now() + Math.random(),
+      x: e.clientX + offsetX,
+      y: e.clientY + offsetY,
+      value: `+${formatNumber(clickPower)}`
+    };
+
+    setFloatingTexts(prev => [...prev, newText]);
+    
+    // Cleanup text after animation
+    setTimeout(() => {
+      setFloatingTexts(prev => prev.filter(t => t.id !== newText.id));
+    }, 1000);
+  };
+
+  const buyGenerator = (id: string) => {
+    setGenerators(prev => prev.map(gen => {
+      if (gen.id !== id) return gen;
+      
+      const cost = calculateCost(gen.baseCost, gen.count);
+      if (matterRef.current < cost) return gen;
+
+      // Deduct cost
+      setMatter(m => m - cost);
+      
+      // Increment count
+      return { ...gen, count: gen.count + 1 };
+    }));
+  };
+
+  const handleResetRequest = () => {
+    setShowResetModal(true);
+  };
+
+  const executeReset = () => {
+    // Clear storage
+    localStorage.removeItem(SAVE_KEY);
+    
+    // Reset state
+    setMatter(0);
+    // Deep copy/reset initial generators to ensure counts are 0
+    setGenerators(INITIAL_GENERATORS.map(g => ({...g})));
+    
+    // Close modal
+    setShowResetModal(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-slate-200 overflow-hidden font-sans selection:bg-indigo-500 selection:text-white">
+      {/* Floating Text Overlay - Global */}
+      {floatingTexts.map(ft => (
+        <div
+          key={ft.id}
+          className="fixed pointer-events-none text-xl font-bold text-white z-50 animate-float shadow-sm"
+          style={{ left: ft.x, top: ft.y, textShadow: '0 0 10px rgba(99, 102, 241, 0.8)' }}
+        >
+          {ft.value}
+        </div>
+      ))}
+
+      {/* Reset Confirmation Modal */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-red-500/50 p-6 rounded-xl max-w-md w-full shadow-[0_0_50px_rgba(239,68,68,0.2)] mx-4 animate-pulse-glow">
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+              ⚠️ {t.big_crunch}
+            </h3>
+            <p className="text-slate-300 mb-6">
+              {t.big_crunch_confirm}
+            </p>
+            <div className="flex justify-end gap-3">
+              <button 
+                onClick={() => setShowResetModal(false)}
+                className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition-colors border border-slate-700"
+              >
+                {t.cancel}
+              </button>
+              <button 
+                onClick={executeReset}
+                className="px-4 py-2 rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors shadow-lg shadow-red-900/50 font-semibold"
+              >
+                {t.confirm_reset}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Layout */}
+      <div className="flex flex-col md:flex-row h-screen">
+        
+        {/* Left Panel: The Game World */}
+        <div className="flex-1 relative flex flex-col p-6 bg-[url('https://picsum.photos/seed/nebula/1920/1080')] bg-cover bg-center">
+          {/* Dark overlay for readability */}
+          <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm z-0"></div>
+          
+          <div className="relative z-10 flex flex-col h-full">
+            {/* Header */}
+            <div className="flex justify-between items-start mb-8">
+               <div>
+                 <h1 className="text-3xl font-black italic tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-purple-400">
+                  {t.app_title}
+                 </h1>
+                 <p className="text-slate-400 text-xs mt-1">{t.version}</p>
+               </div>
+               
+               <div className="flex flex-col items-end gap-2">
+                 <div className="flex bg-slate-800 rounded-md p-1 border border-slate-700">
+                    <button 
+                      onClick={() => handleLanguageChange('en')}
+                      className={`px-2 py-1 text-xs rounded transition-colors ${language === 'en' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      EN
+                    </button>
+                    <button 
+                      onClick={() => handleLanguageChange('zh')}
+                      className={`px-2 py-1 text-xs rounded transition-colors ${language === 'zh' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                    >
+                      中文
+                    </button>
+                 </div>
+                 
+                 <button 
+                  onClick={handleResetRequest}
+                  className="text-xs text-red-500 hover:text-red-300 underline opacity-50 hover:opacity-100 transition-opacity"
+                 >
+                   {t.big_crunch}
+                 </button>
+               </div>
+            </div>
+
+            {/* Visual Center */}
+            <div className="flex-grow flex items-center justify-center">
+              <Singularity 
+                onClick={handleSingularityClick} 
+                matterPerClick={1 + (mps * 0.01)} 
+                language={language}
+              />
+            </div>
+
+            {/* Footer Message */}
+            <div className="text-center text-slate-500 text-xs mt-auto pt-4">
+              {t.footer_quote}
+            </div>
+          </div>
+        </div>
+
+        {/* Right Panel: Controls */}
+        <div className="w-full md:w-[400px] lg:w-[450px] bg-slate-950 border-l border-slate-800 flex flex-col h-1/2 md:h-full z-20 shadow-2xl">
+          <div className="p-6 pb-2">
+            <StatsPanel matter={matter} mps={mps} language={language} />
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-6 scroll-smooth">
+             <UpgradeList 
+               generators={generators} 
+               currentMatter={matter} 
+               onBuy={buyGenerator} 
+               language={language}
+             />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default App;
